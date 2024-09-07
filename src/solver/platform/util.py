@@ -10,7 +10,6 @@ from ..utils.numeric_util import get_boundary_tolerance, get_deviation
 
 def scaler_loader():
     """Load the data and label scalers from the generated files."""
-
     # Paths to the scaler files
     data_scaler_path = os.path.join(GENERATED_DATA_DIR, 'data_scaler.pkl')
     label_scaler_path = os.path.join(GENERATED_DATA_DIR, 'label_scaler.pkl')
@@ -72,21 +71,7 @@ def check_setpoint(value, setpoint, tolerance_threshold=1e-5):
     """
     return get_deviation(value, setpoint, tolerance_threshold)
 
-def generate_pla_points(lb: float, ub: float, func: Callable[[float], float], npts: int = 101) -> Tuple[np.ndarray, np.ndarray]:
-    """Generate piecewise linear approximation (PLA) points for a given function."""
-    ptu = np.linspace(lb, ub, npts)
-    ptf = np.array([func(u) for u in ptu])
-    return ptu, ptf
-
-def calculate_F_deg(p_deg: float, w1: float, w2: float, w3: float) -> float:
-    """Calculate the fuel consumption for the Diesel Engine Generator (DEG)."""
-    return w3 * p_deg**2 + w2 * p_deg + w1
-
-def calculate_F_ess(p_ess: float) -> float:
-    """Calculate the operation cost for the Energy Storage System (ESS)."""
-    return p_ess**2
-
-def extract_results(variable, inner_set: np.ndarray, outer_set: Optional[np.ndarray] = None) -> np.ndarray:
+def get_vars_results(variable, inner_set: np.ndarray, outer_set: Optional[np.ndarray] = None) -> np.ndarray:
     """Extract results from a given variable for the specified sets."""
     if outer_set is not None:
         return np.array([[variable[ii, tt].X for tt in inner_set] for ii in outer_set])
@@ -98,6 +83,6 @@ def create_results_dict(model, variable_dict, time_set):
     
     # Extract results for all variables in the dictionary
     for key, variable in variable_dict.items():
-        results[key] = extract_results(variable, time_set)
+        results[key] = get_vars_results(variable, time_set)
     
     return results

@@ -41,6 +41,3 @@ def feature_engineering(microgrid: object, records: Dict[str, np.ndarray]) -> Di
     records['p_ev'] = (records['p_ev_ch'] - records['p_ev_dch']).reshape(-1, 1)
 
     return records
-
-
-# X_train = np.column_stack((idx_interval, np.array(data_RTP), data_EC_PV, record_BESS_level_train))

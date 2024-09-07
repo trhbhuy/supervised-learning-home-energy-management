@@ -9,13 +9,11 @@ from .components.renewables import PV
 from .components.energy_storage import ESS
 from .components.electric_vehicle import EV
 
-from .util import extract_results, create_results_dict
+from .util import create_results_dict
 
 class HomeEnergyManagementSystem:
     def __init__(self):
-        """
-        Initializes the Home Energy Management System (HEMS) with various parameters.
-        """
+        """Initializes the Home Energy Management System (HEMS) with various parameters."""
         # Time settings
         self.T_num = cfg.T_NUM
         self.T_set = cfg.T_SET
@@ -24,10 +22,11 @@ class HomeEnergyManagementSystem:
         # Initialize the components of the isolated microgrid
         self.grid = Grid(cfg.T_NUM, cfg.T_SET, cfg.DELTA_T, cfg.P_GRID_PUR_MAX, cfg.P_GRID_EXP_MAX, cfg.PHI_RTP)
         self.pv = PV(cfg.T_NUM, cfg.T_SET, cfg.DELTA_T, cfg.P_PV_RATE, cfg.N_PV)
-        self.ess = ESS(cfg.T_NUM, cfg.T_SET, cfg.DELTA_T, cfg.P_ESS_CH_MAX, cfg.P_ESS_DCH_MAX, cfg.N_ESS_CH, cfg.N_ESS_DCH, cfg.SOC_ESS_MAX, cfg.SOC_ESS_MIN, cfg.SOC_ESS_SETPOINT, enable_cost_modeling=True, phi_ess=cfg.PHI_ESS)
+        self.ess = ESS(cfg.T_NUM, cfg.T_SET, cfg.DELTA_T, cfg.P_ESS_CH_MAX, cfg.P_ESS_DCH_MAX, cfg.N_ESS_CH, cfg.N_ESS_DCH, cfg.SOC_ESS_MAX, cfg.SOC_ESS_MIN, cfg.SOC_ESS_SETPOINT)
+        # self.ess = ESS(cfg.T_NUM, cfg.T_SET, cfg.DELTA_T, cfg.P_ESS_CH_MAX, cfg.P_ESS_DCH_MAX, cfg.N_ESS_CH, cfg.N_ESS_DCH, cfg.SOC_ESS_MAX, cfg.SOC_ESS_MIN, cfg.SOC_ESS_SETPOINT, enable_cost_modeling=True, phi_ess=cfg.PHI_ESS)
         self.ev = EV(cfg.T_NUM, cfg.T_SET, cfg.DELTA_T, cfg.P_EV_CH_MAX, cfg.P_EV_DCH_MAX, cfg.N_EV_CH, cfg.N_EV_DCH, cfg.SOC_EV_MAX, cfg.SOC_EV_MIN, cfg.SOC_EV_SETPOINT)
 
-    def optim(self, rtp: np.ndarray, p_pv_max: np.ndarray, p_if: np.ndarray, soc_ev_init_perc: float, ArriveTime: int, DepartureTime: int) -> Dict[str, np.ndarray]:
+    def optim(self, rtp: np.ndarray, p_pv_max: np.ndarray, p_if: np.ndarray, ArriveTime: int, DepartureTime: int, soc_ev_init_perc: float) -> Dict[str, np.ndarray]:
         """HEMS optimization model."""
         model = gp.Model()
         model.ModelSense = GRB.MINIMIZE
@@ -39,13 +38,12 @@ class HomeEnergyManagementSystem:
         # Initialize variables for each component
         p_grid_pur, p_grid_exp, u_grid_pur, u_grid_exp = self.grid.add_variables(model)
         p_pv = self.pv.add_variables(model, p_pv_max)
-        p_ess_ch, p_ess_dch, u_ess_ch, u_ess_dch, soc_ess, p_ess, F_ess = self.ess.add_variables(model)
+        p_ess_ch, p_ess_dch, u_ess_ch, u_ess_dch, soc_ess, _, _ = self.ess.add_variables(model)
         p_ev_ch, p_ev_dch, u_ev_ch, u_ev_dch, soc_ev = self.ev.add_variables(model)            
 
         # Add constraints for each component
         self.grid.add_constraints(model, p_grid_pur, p_grid_exp, u_grid_pur, u_grid_exp)
-
-        self.ess.add_constraints(model, p_ess_ch, p_ess_dch, u_ess_ch, u_ess_dch, soc_ess, p_ess, F_ess)
+        self.ess.add_constraints(model, p_ess_ch, p_ess_dch, u_ess_ch, u_ess_dch, soc_ess)
         self.ev.add_constraints(model, p_ev_ch, p_ev_dch, u_ev_ch, u_ev_dch, soc_ev, t_ev_arrive, t_ev_depart, ev_time_range, soc_ev_init)
 
         # Energy balance
