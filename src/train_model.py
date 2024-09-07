@@ -43,14 +43,17 @@ def parse_option():
 
     opt = parser.parse_args()
 
-    # Set CUDA device
+    # Set CUDA device if available
     if torch.cuda.is_available():
         torch.cuda.set_device(opt.gpu_device)
-    
+        logging.info(f'Using GPU: {torch.cuda.get_device_name(opt.gpu_device)}')
+    else:
+        logging.warning('CUDA is not available. Running on CPU.')
+
     return opt
 
 def set_paths(opt):
-    # Create model save folder
+    """ Create the model save folder based on options."""
     opt.model_name = f'{opt.model}_lr{opt.learning_rate}_bs{opt.batch_size}_{opt.epochs}epochs'
     opt.save_folder = os.path.join(BASE_DIR, 'models', opt.sub_dir, opt.model_name)
 
@@ -60,16 +63,7 @@ def set_paths(opt):
     return opt
 
 def set_loader(opt):
-    """
-    Set up data loaders for training and validation.
-    
-    Args:
-        args (Namespace): Parsed command-line arguments.
-    
-    Returns:
-        train_loader (DataLoader): DataLoader for training data.
-        val_loader (DataLoader): DataLoader for validation data.
-    """
+    """Set up data loaders for training and validation."""
     train_dataset = data_loading(opt, is_train=True)
     val_dataset = data_loading(opt, is_train=False)
     
@@ -80,16 +74,7 @@ def set_loader(opt):
 
 
 def set_model(opt):
-    """
-    Initialize the model and criterion.
-    
-    Args:
-        args (Namespace): Parsed command-line arguments.
-    
-    Returns:
-        model (torch.nn.Module): Initialized model.
-        criterion (torch.nn.Module): Loss function.
-    """
+    """Initialize the model and loss function."""
     if opt.model == 'dnn':
         model = SimpleDNN(input_shape=NUM_FEATURES, num_classes=NUM_CLASSES)
     elif opt.model == 'resnetd':
@@ -97,16 +82,13 @@ def set_model(opt):
     else:
         raise ValueError(f"Model {opt.model} is not supported.")
 
-    # criterion = nn.MSELoss()
     criterion = nn.L1Loss()
     
     if torch.cuda.is_available():
-        if torch.cuda.device_count() > 1:
-            model.encoder = nn.DataParallel(model.encoder)
         model = model.cuda()
         criterion = criterion.cuda()
         cudnn.benchmark = True
-    
+
     return model, criterion
 
 optimize_dict = {
@@ -116,18 +98,9 @@ optimize_dict = {
 }
 
 def set_optimizer(opt, model, optim_choice='Adam'):
-    """
-    Set up the optimizer.
-    
-    Args:
-        args (Namespace): Parsed command-line arguments.
-        model (torch.nn.Module): Model to optimize.
-        optim_choice (str): Optimizer type (e.g., 'Adam').
-    
-    Returns:
-        optimizer (torch.optim.Optimizer): Initialized optimizer.
-    """
+    """Set up the optimizer."""
     optimizer_cls = optimize_dict[optim_choice]
+
     if optim_choice == 'Adam':
         optimizer = optimizer_cls(model.parameters(), lr=opt.learning_rate, weight_decay=opt.weight_decay)
     else:
@@ -137,22 +110,7 @@ def set_optimizer(opt, model, optim_choice='Adam'):
 
 
 def train_model(train_loader, model, criterion, optimizer, epoch, opt, step):
-    """
-    Train the model for one epoch.
-    
-    Args:
-        train_loader (DataLoader): DataLoader for training data.
-        model (torch.nn.Module): Model to train.
-        criterion (torch.nn.Module): Loss function.
-        optimizer (torch.optim.Optimizer): Optimizer.
-        epoch (int): Current epoch.
-        args (Namespace): Parsed command-line arguments.
-        step (int): Global training step.
-    
-    Returns:
-        step (int): Updated training step.
-        avg_train_loss (float): Average training loss for the epoch.
-    """
+    """Train the model for one epoch."""
     model.train()
     losses = MeanMeter()
     
@@ -170,17 +128,7 @@ def train_model(train_loader, model, criterion, optimizer, epoch, opt, step):
 
 
 def validate_model(valid_loader, model, criterion):
-    """
-    Validate the model on validation data.
-    
-    Args:
-        val_loader (DataLoader): DataLoader for validation data.
-        model (torch.nn.Module): Model to validate.
-        criterion (torch.nn.Module): Loss function.
-    
-    Returns:
-        avg_valid_loss (float): Average validation loss.
-    """
+    """Validate the model on validation data."""
     model.eval()
     losses = MeanMeter()
     
@@ -195,9 +143,7 @@ def validate_model(valid_loader, model, criterion):
 
 
 def train(opt):
-    """
-    Main function to train the model.
-    """
+    """Main function to train the model."""
     train_loader, val_loader = set_loader(opt)
     model, criterion = set_model(opt)
     optimizer = set_optimizer(opt, model, optim_choice='Adam')
@@ -221,9 +167,7 @@ def train(opt):
         # Save the best model
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            ckpt = f'ckpt_epoch_{epoch}.pth'
-            save_file = os.path.join(opt.save_folder, ckpt)
-            save_model(model, optimizer, opt, epoch, save_file)
+            save_model(model, optimizer, opt, epoch, os.path.join(opt.save_folder, f'ckpt_epoch_{epoch}.pth'))
             patience_counter = 0
         else:
             patience_counter += 1
@@ -234,17 +178,17 @@ def train(opt):
             break
     
     # Save the last model
-    save_file = os.path.join(opt.save_folder, 'last.pth')
-    save_model(model, optimizer, opt, opt.epochs, save_file)
+    save_model(model, optimizer, opt, epoch, os.path.join(opt.save_folder, 'last.pth'))
 
 def main():
+    """Main entry point for train."""
     # Parse arguments
     opt = parse_option()
 
     # Train for multiple datasets based on subdirectories
     for subdir in opt.sub_dirs:
         logging.info(f"Starting training for: {subdir}")
-
+        
         # Set paths for loading and saving
         opt.sub_dir = subdir
         opt = set_paths(opt)
