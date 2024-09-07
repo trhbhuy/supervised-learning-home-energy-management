@@ -1,10 +1,11 @@
 import os
+import re
 import argparse
 import logging
 import numpy as np
 import torch
 
-from solver.platform.hems_env import SmartHomeEnv
+from solver.platform.test_env import SmartHomeEnv
 from networks.dnn import SimpleDNN
 from networks.resnetd import ResNetD
 from utils.test_util import cal_metric, load_dataset
@@ -19,7 +20,7 @@ def parse_args():
     Parse command-line arguments for the testing script.
     """
     parser = argparse.ArgumentParser('Arguments for testing')
-    parser.add_argument('--env', type=str, default='microgrid', help='Environment to be used for testing')
+    parser.add_argument('--env', type=str, default='hems', help='Environment to be used for testing')
     parser.add_argument('--num_test_scenarios', type=int, default=26, help='Number of test scenarios')
     parser.add_argument('--data_path', type=str, default='data/processed/ObjVal.csv', help='Path to the test dataset')
     parser.add_argument('--sub_dirs', type=str, nargs='+', default=['ess', 'ev'], help='List of subdirectories for models')
@@ -28,7 +29,8 @@ def parse_args():
     parser.add_argument('--learning_rate', type=float, default=0.005, help='Learning rate for the model')
     parser.add_argument('--batch_size', type=int, default=48, help='Batch size for testing')
     parser.add_argument('--epochs', type=int, default=500, help='Number of epochs used for training')
-    parser.add_argument('--ckpt', type=int, default=35, help='Checkpoint ID for pretrained model')
+    # parser.add_argument('--ckpt', type=int, default=35, help='Checkpoint ID for pretrained model')
+    parser.add_argument('--ckpt', type=str, default='best', help='Checkpoint to load (e.g., final, highest, or specific epoch)')
 
     args = parser.parse_args()
 
@@ -44,10 +46,35 @@ def load_env(args):
     Returns:
         env: Initialized environment.
     """
-    if args.env == 'microgrid':
+    if args.env == 'hems':
         return SmartHomeEnv()
     else:
         raise ValueError(f"Unsupported environment: {args.env}")
+
+def find_best_ckpt(pretrained_path):
+    """
+    Find the checkpoint file with the highest epoch number.
+
+    Args:
+        pretrained_path (str): Path to the directory containing checkpoints.
+
+    Returns:
+        str: The checkpoint file with the highest epoch number.
+    """
+    ckpt_files = [f for f in os.listdir(pretrained_path) if re.match(r'ckpt_epoch_\d+\.pth', f)]
+    
+    if not ckpt_files:
+        raise FileNotFoundError(f"No checkpoint files found in {pretrained_path}")
+
+    # Extract epoch numbers from filenames
+    epoch_numbers = [int(re.findall(r'\d+', ckpt)[0]) for ckpt in ckpt_files]
+    best_epoch = max(epoch_numbers)
+
+    # Find the file with the highest epoch
+    best_ckpt = f"ckpt_epoch_{best_epoch}.pth"
+    logging.info(f"Best checkpoint found: {best_ckpt}")
+    
+    return best_ckpt
 
 def load_models_weights(args, model, verbose=True):
     """
@@ -64,13 +91,18 @@ def load_models_weights(args, model, verbose=True):
     if verbose:
         print('Loading: ', model.__class__.__name__)
 
-    # Define folder path of pretrained model
+    # Define the folder path for the pretrained model
     args.model_name = f'{args.pretrained_model}_lr{args.learning_rate}_bs{args.batch_size}_{args.epochs}epochs'
     args.pretrained_path = os.path.join(BASE_DIR, 'models', args.sub_dir, args.model_name)
-    # args.pretrained_path = os.path.join(BASE_DIR, 'models', args.model_name)
 
-    model_file = f'{args.pretrained_path}/last.pth'
-    # model_file = f'{args.pretrained_path}/ckpt_epoch_{args.ckpt}.pth'
+    # Determine the checkpoint to load: final, highest, or a specific epoch
+    if args.ckpt == 'last':
+        model_file = os.path.join(args.pretrained_path, 'last.pth')
+    elif args.ckpt == 'best':
+        model_file = os.path.join(args.pretrained_path, find_best_ckpt(args.pretrained_path))
+    else:
+        model_file = os.path.join(args.pretrained_path, f'ckpt_epoch_{args.ckpt}.pth')
+
     ckpt = torch.load(model_file)
     state_dict=ckpt['model']
     model.load_state_dict(state_dict=state_dict)

@@ -2,28 +2,37 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 from typing import Callable, Dict, Tuple, Optional
-
 import gurobipy as gp
 from gurobipy import GRB
 
+from .components.utility_grid import Grid
+from .components.renewables import PV
+from .components.energy_storage import ESS
+from .components.electric_vehicle import EV
+
 from .. import config as cfg
 from ..methods.data_loader import load_data
-from .util import scaler_loader, check_boundary_constraint, check_ramp_constraint, check_setpoint, generate_pla_points, calculate_F_deg, calculate_F_ess
+from .util import scaler_loader, check_boundary_constraint, check_ramp_constraint, check_setpoint
 
 class SmartHomeEnv(gym.Env):
     def __init__(self):
         """Initialize the microgrid environment."""
         # Load and initialize the parameters
-        self._initialize_parameters()
+        self._init_parameters()
     
         # Load the simulation data
         self.data = load_data(is_train=False)
-        self.num_scenarios = len(self.data['initial_soc_ev'])
+        self.num_scenarios = len(self.data['soc_ev_init'])
         print(f"Number of scenarios: {self.num_scenarios}")
+
+        # Initialize the components of the isolated microgrid
+        self.grid = Grid(cfg.T_NUM, cfg.T_SET, cfg.DELTA_T, cfg.P_GRID_PUR_MAX, cfg.P_GRID_EXP_MAX, cfg.PHI_RTP)
+        self.pv = PV(cfg.T_NUM, cfg.T_SET, cfg.DELTA_T, cfg.P_PV_RATE, cfg.N_PV)
+        self.ess = ESS(cfg.T_NUM, cfg.T_SET, cfg.DELTA_T, cfg.P_ESS_CH_MAX, cfg.P_ESS_DCH_MAX, cfg.N_ESS_CH, cfg.N_ESS_DCH, cfg.SOC_ESS_MAX, cfg.SOC_ESS_MIN, cfg.SOC_ESS_SETPOINT)
+        self.ev = EV(cfg.T_NUM, cfg.T_SET, cfg.DELTA_T, cfg.P_EV_CH_MAX, cfg.P_EV_DCH_MAX, cfg.N_EV_CH, cfg.N_EV_DCH, cfg.SOC_EV_MAX, cfg.SOC_EV_MIN, cfg.SOC_EV_SETPOINT)
 
         # Load state and action scalers
         self.state_scaler, self.action_scaler = scaler_loader()
-        # self.ev_state_scaler, self.ev_action_scaler = scaler_loader()
 
         # Define observation space (normalized to [0, 1])
         observation_dim = 4  # Example: time_step, net demand, SOC of ESS
@@ -53,26 +62,14 @@ class SmartHomeEnv(gym.Env):
         # Normalize the initial state
         self.state = self.state_scaler.transform([initial_state])[0].astype(np.float32)
 
-        # Get availablity of EV action
-        self.initial_soc_ev, self.t_ev_arrive, self.t_ev_depart, self.ev_time_range = self.get_ev_availablity(self.data['initial_soc_ev'][self.scenario_seed], 
-                                                                                                              self.data['t_ev_arrive'][self.scenario_seed], 
-                                                                                                              self.data['t_ev_depart'][self.scenario_seed])
+        # Define EV availability
+        self.t_ev_arrive, self.t_ev_depart, self.ev_time_range, self.soc_ev_init = self.ev.get_ev_availablity(self.data['t_ev_arrive'][self.scenario_seed], 
+                                                                                                              self.data['t_ev_depart'][self.scenario_seed], 
+                                                                                                              soc_ev_init_perc=self.data['soc_ev_init'][self.scenario_seed])
 
-        # print(f"Scenario {self.scenario_seed + 1} - Initial SOC EV: {self.initial_soc_ev}, EV Arrive: {self.t_ev_arrive}, EV Depart: {self.t_ev_depart}")
+        # print(f"Scenario {self.scenario_seed + 1} - Initial SOC EV: {self.soc_ev_init}, EV Arrive: {self.t_ev_arrive}, EV Depart: {self.t_ev_depart}")
 
         return self.state, {}
-
-    def get_ev_availablity(self, initial_soc_ev_percentage, ArriveTime, DepartureTime):
-        """Define availablity of EV action."""
-        initial_soc_ev = self.soc_ev_max * initial_soc_ev_percentage
-        t_ev_arrive = int(ArriveTime - 12)   # Example: ev arrives home at 17:00 --> interval 5
-        t_ev_depart = int(DepartureTime + 12)   # Example: ev is fully charged and departs at 8:00 --> interval 20
-
-        ev_time_range = np.zeros(self.T_num)
-        ev_time_range[t_ev_arrive:t_ev_depart+1] = 1
-        self.num_pv_operation = int(np.sum(ev_time_range))
-
-        return initial_soc_ev, t_ev_arrive, t_ev_depart, ev_time_range
     
     def step(self, action):
         """Take an action and return the next state, reward, and termination status."""
@@ -99,7 +96,7 @@ class SmartHomeEnv(gym.Env):
                                         [self.p_ev_ch_max, self.p_ev_ch_max]) 
 
         p_ess_ch, p_ess_dch, soc_ess = self._update_ess(time_step, ess_action, soc_ess_tempt)
-        p_ev_ch, p_ev_dch, soc_ev = self._update_ev(time_step, ev_action, soc_ev_tempt, self.initial_soc_ev, self.t_ev_arrive, self.t_ev_depart, self.ev_time_range)
+        p_ev_ch, p_ev_dch, soc_ev = self._update_ev(time_step, ev_action, soc_ev_tempt, self.soc_ev_init, self.t_ev_arrive, self.t_ev_depart, self.ev_time_range)
 
         # Solve the MILP optimization problem
         p_grid_pur, p_grid_exp, u_grid_pur, u_grid_exp, p_pv, reward = self.optim(time_step, rtp, p_pv_max, p_if, p_ess_ch, p_ess_dch, p_ev_ch, p_ev_dch)
@@ -144,7 +141,7 @@ class SmartHomeEnv(gym.Env):
         terminated = time_step >= self.T_num
 
         if time_step == self.t_ev_arrive:
-            soc_ev = self.initial_soc_ev
+            soc_ev = self.soc_ev_init
 
         if not terminated:
             base_idx = self.scenario_seed * self.T_num + time_step
@@ -191,7 +188,7 @@ class SmartHomeEnv(gym.Env):
 
         return p_ess_ch, p_ess_dch, soc_ess
 
-    def _update_ev(self, time_step, action, soc_ev_tempt, initial_soc_ev, t_ev_arrive, t_ev_depart, ev_time_range):
+    def _update_ev(self, time_step, action, soc_ev_tempt, soc_ev_init, t_ev_arrive, t_ev_depart, ev_time_range):
         """Update the EV state based on the action taken."""
         # Initialize charge and discharge power
         p_ev_ch, p_ev_dch = 0.0, 0.0
@@ -285,6 +282,7 @@ class SmartHomeEnv(gym.Env):
         # Cost exchange with utility grid
         F_grid = self.delta_t * (p_grid_pur * rtp - p_grid_exp * rtp * self.phi_rtp)
 
+        # print(np.array(rtp).reshape(-1,)[0])        
         # Define problem and solve
         model.setObjective(F_grid)
         model.optimize()
@@ -292,7 +290,7 @@ class SmartHomeEnv(gym.Env):
         # return results
         return p_grid_pur.x, p_grid_exp.x, u_grid_pur.x, u_grid_exp.x, p_pv.x, model.objVal
 
-    def _initialize_parameters(self):
+    def _init_parameters(self):
         """Initialize constants and parameters from the scenario configuration."""
         # Time settings
         self.T_num = cfg.T_NUM
