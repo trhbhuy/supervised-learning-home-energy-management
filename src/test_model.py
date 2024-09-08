@@ -116,8 +116,8 @@ def inference(args, model_ess, model_ev):
     episode_info = []
 
     # Evaluate the model for each day
-    for scenario_idx in range(env.num_scenarios):
-        state, info = env.reset(scenario_idx)
+    for scn in range(env.num_scenarios):
+        state, info = env.reset(scn)
         total_reward = 0
 
         while True:

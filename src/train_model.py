@@ -159,7 +159,7 @@ def train(opt):
         step, train_loss = train_model(train_loader, model, criterion, optimizer, epoch, opt, step)
         val_loss = validate_model(val_loader, model, criterion)
         
-        print(f'Epoch: {epoch}, Train Loss: {train_loss:.4f}, Validation Loss: {val_loss:.4f}')
+        logging.info(f'Epoch: {epoch}, Train Loss: {train_loss:.4f}, Validation Loss: {val_loss:.4f}')
 
         # Update learning rate
         scheduler.step()
@@ -174,7 +174,7 @@ def train(opt):
         
         # Early stopping
         if opt.use_early_stop and patience_counter >= opt.patience:
-            print(f"Early stopping at epoch {epoch}. Best Validation Loss: {best_val_loss:.4f}")
+            logging.info(f"Early stopping at epoch {epoch}. Best Validation Loss: {best_val_loss:.4f}")
             break
     
     # Save the last model

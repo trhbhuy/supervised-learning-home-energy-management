@@ -1,7 +1,7 @@
+import logging
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
-from typing import Callable, Dict, Tuple, Optional
 import gurobipy as gp
 from gurobipy import GRB
 from .components.electric_vehicle import EV
@@ -9,6 +9,9 @@ from .components.electric_vehicle import EV
 from .. import config as cfg
 from ..methods.data_loader import load_data
 from .util import scaler_loader, check_boundary_constraint, check_setpoint
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class SmartHomeEnv(gym.Env):
     def __init__(self):
@@ -19,7 +22,7 @@ class SmartHomeEnv(gym.Env):
         # Load the simulation data
         self.data = load_data(is_train=False)
         self.num_scenarios = len(self.data['soc_ev_init'])
-        print(f"Number of scenarios: {self.num_scenarios}")
+        logging.info(f"Number of scenarios: {self.num_scenarios}")
 
         # Initialize EV
         self.ev = EV(cfg.T_NUM, cfg.T_SET, cfg.DELTA_T, cfg.P_EV_CH_MAX, cfg.P_EV_DCH_MAX, cfg.N_EV_CH, cfg.N_EV_DCH, cfg.SOC_EV_MAX, cfg.SOC_EV_MIN, cfg.SOC_EV_SETPOINT)
@@ -106,7 +109,6 @@ class SmartHomeEnv(gym.Env):
             "u_grid_pur": u_grid_pur,
             "u_grid_exp": u_grid_exp,
             "p_pv": p_pv,
-            "p_if": self.data['p_if'][base_idx],
             "p_ess_ch": p_ess_ch,
             "p_ess_dch": p_ess_dch,
             "soc_ess": soc_ess,
@@ -166,10 +168,6 @@ class SmartHomeEnv(gym.Env):
             # Postprocess action to meet all ESS bound constraints
             p_ess_ch, p_ess_dch = self._postprocess_bound(p_ess_ch, p_ess_dch, soc_ess, soc_ess_tempt, self.p_ess_ch_max, self.p_ess_dch_max, self.n_ess_ch, self.n_ess_dch, self.soc_ess_max, self.soc_ess_min)
 
-            # # Special condition for the second-to-last timestep
-            # if time_step == self.T_num - 2:
-            #     p_ess_ch, p_ess_dch = self._postprocess_ess_setpoint(p_ess_ch, p_ess_dch, soc_ess, soc_ess_tempt)
-
         # Update SOC based on adjusted powers
         soc_ess = soc_ess_tempt + self.delta_t * (p_ess_ch * self.n_ess_ch - p_ess_dch / self.n_ess_dch)
 
@@ -216,18 +214,6 @@ class SmartHomeEnv(gym.Env):
             p_dch = min(p_dch, p_dch_max)
 
         return p_ch, p_dch
-
-    def _postprocess_ess_setpoint(self, p_ess_ch, p_ess_dch, soc_ess, soc_ess_tempt):
-        """Handle special conditions for ESS at the second-to-last timestep."""
-        if soc_ess < self.soc_ess_threshold:
-            if soc_ess_tempt < self.soc_ess_threshold:
-                p_ess_ch = min((self.soc_ess_threshold - soc_ess_tempt) / (self.n_ess_ch * self.delta_t), self.p_ess_ch_max)
-                p_ess_dch = 0
-            elif soc_ess_tempt > self.soc_ess_threshold:
-                p_ess_ch = 0
-                p_ess_dch = min((soc_ess_tempt - self.soc_ess_threshold) * self.n_ess_dch / self.delta_t, self.p_ess_dch_max)
-
-        return p_ess_ch, p_ess_dch
 
     def _get_penalty(self, time_step, p_grid_pur, p_grid_exp, soc_ess, soc_ev, ev_time_range):
         """Calculate penalties for boundary and ramp rate violations for the generator and ESS."""

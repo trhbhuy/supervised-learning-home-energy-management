@@ -22,7 +22,7 @@ def feature_engineering(microgrid: object, records: Dict[str, np.ndarray]) -> Di
     records['time_step'] = np.tile(np.arange(T_num), num_scenarios)
 
     # Calculate Net load
-    records['p_net'] = (records['p_if'] - (records['p_pv'])).ravel()
+    records['p_net'] = (records['p_if'] - (records['p_pv_max'])).ravel()
 
     # Calculate the SOC of ESS at the previous time step
     soc_ess_flattened = records['soc_ess'].ravel()

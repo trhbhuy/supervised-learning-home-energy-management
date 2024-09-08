@@ -50,7 +50,7 @@ The dataset contains load and temperature data from 2003 to 2014. -->
     │   └── config.py                      # Configuration file for parameters
     ├── utils/                             # High-level utility scripts
     │   ├── __init__.py
-    │   ├── common_util.py                 # Common utility functions
+    │   ├── common_util.py
     │   ├── preprocessing_util.py
     │   ├── test_util.py
     │   └── train_util.py
