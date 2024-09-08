@@ -8,11 +8,11 @@ from ..config import GENERATED_DATA_DIR
 from ..utils.file_util import load_pickle
 from ..utils.numeric_util import get_boundary_tolerance, get_deviation
 
-def scaler_loader():
+def scaler_loader(subdir=''):
     """Load the data and label scalers from the generated files."""
     # Paths to the scaler files
-    data_scaler_path = os.path.join(GENERATED_DATA_DIR, 'data_scaler.pkl')
-    label_scaler_path = os.path.join(GENERATED_DATA_DIR, 'label_scaler.pkl')
+    data_scaler_path = os.path.join(GENERATED_DATA_DIR, subdir, 'data_scaler.pkl')
+    label_scaler_path = os.path.join(GENERATED_DATA_DIR, subdir, 'label_scaler.pkl')
 
     # Load the data scaler
     data_scaler = load_pickle(data_scaler_path)

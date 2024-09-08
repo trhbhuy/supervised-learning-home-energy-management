@@ -25,11 +25,9 @@ def parse_args():
     parser.add_argument('--data_path', type=str, default='data/processed/ObjVal.csv', help='Path to the test dataset')
     parser.add_argument('--sub_dirs', type=str, nargs='+', default=['ess', 'ev'], help='List of subdirectories for models')
     parser.add_argument('--pretrained_model', type=str, choices=['resnetd', 'dnn'], default='dnn', help='Pretrained model to be loaded')
-    # parser.add_argument('--pretrained_path', type=str, default='models', help='Path to the pretrained model weights')
     parser.add_argument('--learning_rate', type=float, default=0.005, help='Learning rate for the model')
     parser.add_argument('--batch_size', type=int, default=48, help='Batch size for testing')
     parser.add_argument('--epochs', type=int, default=500, help='Number of epochs used for training')
-    # parser.add_argument('--ckpt', type=int, default=35, help='Checkpoint ID for pretrained model')
     parser.add_argument('--ckpt', type=str, default='best', help='Checkpoint to load (e.g., final, highest, or specific epoch)')
 
     args = parser.parse_args()
@@ -39,12 +37,6 @@ def parse_args():
 def load_env(args):
     """
     Load the specified environment for testing.
-
-    Args:
-        args: Parsed command-line arguments.
-
-    Returns:
-        env: Initialized environment.
     """
     if args.env == 'hems':
         return SmartHomeEnv()
@@ -53,13 +45,7 @@ def load_env(args):
 
 def find_best_ckpt(pretrained_path):
     """
-    Find the checkpoint file with the highest epoch number.
-
-    Args:
-        pretrained_path (str): Path to the directory containing checkpoints.
-
-    Returns:
-        str: The checkpoint file with the highest epoch number.
+    Find the checkpoint file with the highest epoch number in the specified path.
     """
     ckpt_files = [f for f in os.listdir(pretrained_path) if re.match(r'ckpt_epoch_\d+\.pth', f)]
     
@@ -76,20 +62,11 @@ def find_best_ckpt(pretrained_path):
     
     return best_ckpt
 
-def load_models_weights(args, model, verbose=True):
+def load_models_weights(args, model):
     """
     Load the pretrained model weights from the specified checkpoint.
-
-    Args:
-        args: Parsed command-line arguments.
-        model: Model instance to load weights into.
-        verbose (bool): Whether to print status messages.
-
-    Returns:
-        model: Model with loaded weights.
     """
-    if verbose:
-        print('Loading: ', model.__class__.__name__)
+    logging.info(f"Loading weights for model: {model.__class__.__name__}")
 
     # Define the folder path for the pretrained model
     args.model_name = f'{args.pretrained_model}_lr{args.learning_rate}_bs{args.batch_size}_{args.epochs}epochs'
@@ -104,46 +81,29 @@ def load_models_weights(args, model, verbose=True):
         model_file = os.path.join(args.pretrained_path, f'ckpt_epoch_{args.ckpt}.pth')
 
     ckpt = torch.load(model_file)
-    state_dict=ckpt['model']
-    model.load_state_dict(state_dict=state_dict)
+    model.load_state_dict(state_dict=ckpt['model'])
 
     return model
 
-def load_model(args, verbose=False, is_cuda=False):
+def load_model(args, is_cuda=False):
     """
     Initialize and load the model with pretrained weights.
-
-    Args:
-        args: Parsed command-line arguments.
-        verbose (bool): Whether to print status messages.
-        is_cuda (bool): Whether to use CUDA.
-
-    Returns:
-        model: The loaded model.
     """
     if args.pretrained_model == 'dnn':
         model = SimpleDNN(input_shape=4, num_classes=1)
-        model = load_models_weights(args, model, verbose)
     elif args.pretrained_model == 'resnetd':
         model = ResNetD(input_shape=4, num_classes=1)
-        model = load_models_weights(args, model, verbose)
+
+    model = load_models_weights(args, model)
 
     if is_cuda:
         model = model.cuda()
 
     return model
 
-def inference(args, model_ess, model_ev, verbose=False):
+def inference(args, model_ess, model_ev):
     """
-    Perform inference using the provided model in the specified environment.
-
-    Args:
-        args: Configuration arguments containing environment and model details.
-        model: The pre-trained model used for inference.
-        verbose (bool): If True, prints detailed information during inference.
-
-    Returns:
-        tuple: Aggregated rewards and episode information as numpy arrays.
+    Perform inference using the provided models in the specified environment.
     """
     model_ess.eval()
     model_ev.eval()
@@ -162,19 +122,7 @@ def inference(args, model_ess, model_ev, verbose=False):
 
         while True:
             # Split the state for model_ess and model_ev
-            state_ess = np.array([
-                state[0],  # self.time_step
-                state[1],  # self.data['rtp'][index]
-                state[2],  # self.data['p_if'][index] - self.data['p_pv_max'][index]
-                state[3],  # self.soc_ess_setpoint
-            ], dtype=np.float32)
-
-            state_ev = np.array([
-                state[0],  # self.time_step
-                state[1],  # self.data['rtp'][index]
-                state[2],  # self.data['p_if'][index] - self.data['p_pv_max'][index]
-                state[4],  # self.soc_ev_setpoint
-            ], dtype=np.float32)
+            state_ess, state_ev = state[:4], state[[0, 1, 2, 4]]
 
             # Convert the states to PyTorch tensors
             state_ess_torch = torch.tensor(state_ess, dtype=torch.float32)
@@ -202,69 +150,42 @@ def inference(args, model_ess, model_ev, verbose=False):
         
         aggregated_rewards.append(total_reward)
         
-        # Log progress
-        # logging.info(f"Scenario {scenario_idx+1}: Optimal ObjVal = {total_reward:.4f}")
-
     return np.array(aggregated_rewards), np.array(episode_info)
 
-def evaluate(args, model_ess, model_ev, best_rewards, verbose=False):
+def evaluate(args, model_ess, model_ev, best_rewards):
     """
-    Evaluate the model using the provided dataset and calculate evaluation metrics.
-
-    Args:
-        args: Parsed command-line arguments.
-        model: The trained model to be evaluated.
-        best_rewards: True rewards for comparison.
-        verbose (bool): Whether to print status messages.
-
-    Returns:
-        dict: A dictionary containing evaluation metrics.
+    Evaluate the models and calculate metrics based on predictions vs actual rewards.
     """
     # Perform inference with the model
-    predicted_rewards, inference_info = inference(args, model_ess, model_ev, verbose)
+    predicted_rewards, inference_info = inference(args, model_ess, model_ev)
     
     # Calculate evaluation metrics (e.g., MAE, MAPE) based on the true values and predictions
-    evaluation_metrics = cal_metric(best_rewards, predicted_rewards)
+    metrics = cal_metric(best_rewards, predicted_rewards)
     
-    # Optionally, print the evaluation results
-    if verbose:
-        # for i in range(len(predicted_rewards)):
-        #     print(f"Scenario {i+1}: Best rewards = {best_rewards[i]:.4f}, Optimal ObjVal = {predicted_rewards[i]:.4f}")
+    # Print the evaluation results
+    logging.info(f"Overall MAE: {metrics['overall_mae']:.4f}, Overall MAPE: {metrics['overall_mape']:.4f}%")
 
-        print(f"Overall MAE: {evaluation_metrics['overall_mae']:.4f}, "
-              f"Overall MAPE: {evaluation_metrics['overall_mape']:.4f}%")
-    
-    return evaluation_metrics, inference_info
+    return metrics, inference_info
 
-def test(args, verbose=True, is_cuda=False):
+def test(args, is_cuda=False):
     """
-    Test the model by evaluating its predictions against the actual rewards.
-
-    Args:
-        args: Parsed command-line arguments.
-        verbose (bool): Whether to print status messages.
-
-    Returns:
-        dict: A dictionary containing evaluation metrics.
+    Test the model by evaluating its predictions against the best rewards.
     """
     # Load the actual rewards (ground truth) from the dataset
     best_rewards = load_dataset(args)
 
-    # Load the pre-trained model with the specified configuration
-    args.sub_dir = 'ess'
-    model_ess = load_model(args, verbose=verbose, is_cuda=False)
-    logging.info(f"Loading model for {args.sub_dir}")
-
-    args.sub_dir = 'ev'
-    model_ev = load_model(args, verbose=verbose, is_cuda=False)
-    logging.info(f"Loading model for {args.sub_dir}")
+    # Load the pre-trained models
+    models = {}
+    for sub_dir in args.sub_dirs:
+        args.sub_dir = sub_dir
+        models[sub_dir] = load_model(args)
 
     # Evaluate the model's predictions against the actual rewards
-    evaluation_metrics, inference_info = evaluate(args, model_ess, model_ev, best_rewards, verbose)
+    metrics, inference_info = evaluate(args, models['ess'], models['ev'], best_rewards)
 
-    return evaluation_metrics, inference_info
+    return metrics, inference_info
 
 # python3 src/test_model.py
 if __name__ == '__main__':
     args = parse_args()
-    test(args, verbose=True, is_cuda=False)
+    test(args, is_cuda=False)
