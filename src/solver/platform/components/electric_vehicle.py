@@ -6,8 +6,7 @@ class EV:
     def __init__(self, T_num, T_set, delta_t, p_ev_ch_max, p_ev_dch_max, n_ev_ch, n_ev_dch, soc_ev_max, soc_ev_min, soc_ev_setpoint):
         """Initialize parameters."""
         self.T_num = T_num
-        self.T_set = np.arange(T_num)
-        # self.T_set = T_set
+        self.T_set = T_set
         self.delta_t = delta_t
 
         self.p_ev_ch_max = p_ev_ch_max
