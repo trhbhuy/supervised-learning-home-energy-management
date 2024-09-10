@@ -1,4 +1,4 @@
-# Supervised learning home energy management systems (SL - HEMS)
+# Supervised learning home energy management (SL - HEMS)
 
 This repository contains the implementation for our paper: ["Real-time energy scheduling for home energy management systems with an energy storage system and electric vehicle based on a supervised-learning-based strategy"](https://doi.org/10.1016/j.enconman.2023.117340), published in the Energy Conversion and Management.
 
