@@ -167,6 +167,8 @@ cython_debug/
 #.idea/
 
 # data/
+data/generated/
+data/processed/
 models/
 notebook/
 scripts/
