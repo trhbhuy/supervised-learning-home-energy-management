@@ -1,14 +1,13 @@
 import numpy as np
 import gurobipy as gp
 from gurobipy import GRB
-from typing import Dict, Optional
-from .. import config as cfg
+from typing import Dict
 
 from .components.utility_grid import Grid
 from .components.renewables import PV
 from .components.energy_storage import ESS
 from .components.electric_vehicle import EV
-
+from .. import config as cfg
 from .util import create_results_dict
 
 class HomeEnergyManagementSystem:

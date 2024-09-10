@@ -1,16 +1,6 @@
-# Real-time energy scheduling for home energy management systems (SL - HEMS)
+# Supervised learning home energy management systems (SL - HEMS)
 
 This repository contains the implementation for our paper: ["Real-time energy scheduling for home energy management systems with an energy storage system and electric vehicle based on a supervised-learning-based strategy"](https://doi.org/10.1016/j.enconman.2023.117340), published in the Energy Conversion and Management.
-
-<!-- ## Environment 
-
-- tensorflow: 2.0
-- torch: 1.9 -->
-
-<!-- ## Dataset
-We opensource in this repository the model used for the ISO-NE test case. Code for ResNetPlus model can be found in /ISO-NE/ResNetPlus_ISONE.py
-
-The dataset contains load and temperature data from 2003 to 2014. -->
 
 ## Setup 
 
@@ -121,5 +111,5 @@ If you find the code useful in your research, please consider citing our paper:
    year = {2023},
 }
 ```
-## License
-[MIT LICENSE](LICENSE)
+<!-- ## License
+[MIT LICENSE](LICENSE) -->

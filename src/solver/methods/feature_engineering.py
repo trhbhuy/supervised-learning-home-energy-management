@@ -1,6 +1,5 @@
 import numpy as np
 from typing import Dict
-import pandas as pd
 
 def feature_engineering(microgrid: object, records: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
     """

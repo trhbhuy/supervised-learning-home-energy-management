@@ -29,16 +29,16 @@ def parse_option():
     parser.add_argument('--sub_dirs', type=str, nargs='+', default=['ess', 'ev'], help='List of subdirectories for datasets')
     parser.add_argument('--model', type=str, choices=['resnetd', 'dnn'], default='dnn', help='Model type')
     parser.add_argument('--batch_size', type=int, default=48, help='Batch size')
-    parser.add_argument('--epochs', type=int, default=500, help='Number of epochs')
+    parser.add_argument('--epochs', type=int, default=1000, help='Number of epochs')
     parser.add_argument('--num_workers', type=int, default=4, help='Number of data loading workers')
     parser.add_argument('--gpu_device', type=int, default=0, help='GPU device ID')
     parser.add_argument('--learning_rate', type=float, default=0.005, help='Learning rate')
-    parser.add_argument('--lr_decay_epochs', type=int, default=50, help='LR decay epochs')
+    parser.add_argument('--lr_decay_epochs', type=int, default=100, help='LR decay epochs')
     parser.add_argument('--lr_decay_rate', type=float, default=0.1, help='LR decay rate')
     parser.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay')
     parser.add_argument('--momentum', type=float, default=0.9, help='Momentum')
     parser.add_argument('--use_early_stop', action='store_true', default=False, help='Enable early stopping')
-    parser.add_argument('--patience', type=int, default=10, help='Early stopping patience')
+    parser.add_argument('--patience', type=int, default=20, help='Early stopping patience')
     parser.add_argument('--rid', type=str, default='', help='Run ID')
 
     opt = parser.parse_args()
@@ -196,7 +196,7 @@ def main():
         # Training
         train(opt)    
     
-# python3 src/train_model.py --data_dir data/generated --model resnetd --batch_size 48 --epochs 200 --gpu_device 0 --learning_rate 0.005 --lr_decay_epochs 50 --use_early_stop --patience 30
+# python3 src/train_model.py --data_dir data/generated --model dnn --batch_size 48 --epochs 200 --gpu_device 0 --learning_rate 0.005 --lr_decay_epochs 50 --use_early_stop --patience 10
 # Entry point
 if __name__ == '__main__':
     main()

@@ -5,9 +5,9 @@ import logging
 import numpy as np
 import torch
 
-from solver.platform.test_env import SmartHomeEnv
 from networks.dnn import SimpleDNN
 from networks.resnetd import ResNetD
+from solver.platform.test_env import SmartHomeEnv
 from utils.test_util import cal_metric, load_dataset
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -27,7 +27,7 @@ def parse_args():
     parser.add_argument('--pretrained_model', type=str, choices=['resnetd', 'dnn'], default='dnn', help='Pretrained model to be loaded')
     parser.add_argument('--learning_rate', type=float, default=0.005, help='Learning rate for the model')
     parser.add_argument('--batch_size', type=int, default=48, help='Batch size for testing')
-    parser.add_argument('--epochs', type=int, default=500, help='Number of epochs used for training')
+    parser.add_argument('--epochs', type=int, default=1000, help='Number of epochs used for training')
     parser.add_argument('--ckpt', type=str, default='best', help='Checkpoint to load (e.g., final, highest, or specific epoch)')
 
     args = parser.parse_args()
