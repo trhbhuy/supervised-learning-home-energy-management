@@ -1,4 +1,4 @@
-# Supervised learning home energy management (SL - HEMS)
+# Supervised learning home energy management systems (SL - HEMS)
 
 This repository contains the implementation for our paper: ["Real-time energy scheduling for home energy management systems with an energy storage system and electric vehicle based on a supervised-learning-based strategy"](https://doi.org/10.1016/j.enconman.2023.117340), published in the Energy Conversion and Management.
 
@@ -82,7 +82,7 @@ Train the ResnesD model using the generated data:
 ```
 python3 train_model.py --data_dir data/generated/ \\
                       --model dnn --batch_size 48 \\
-                      --epochs 200 --learning_rate 0.005 --gpu_device 0 \\
+                      --epochs 500 --learning_rate 0.005 --gpu_device 0 \\
                       --lr_decay_epochs 50 --use_early_stop --patience 20
 ```
 
@@ -94,7 +94,7 @@ python3 test_model.py --env hems \\
                       --data_path data/processed/ObjVal.csv \\
                       --num_test_scenarios 26 \\
                       --pretrained_model dnn \\
-                      --learning_rate 0.005 --batch_size 48 --epochs 200 \\
+                      --learning_rate 0.005 --batch_size 48 --epochs 500 \\
 ```
 
 ## Citation
